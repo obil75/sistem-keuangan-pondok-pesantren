@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definitions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Rules & Validations
+
+    // 1. STUDENTS COLLECTION
+    match /students/{studentId} {
+      allow read, list: if isVerifiedUser();
+      allow create: if isVerifiedUser() 
+        && isValidId(studentId) 
+        && isValidStudent(incoming())
+        && incoming().id == studentId;
+      allow update: if isVerifiedUser()
+        && isValidStudent(incoming())
+        // Guard immutability of structural primary ids
+        && incoming().id == existing().id
+        && incoming().nis == existing().nis;
+      allow delete: if isVerifiedUser();
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['id', 'nis', 'name', 'className', 'parentName', 'parentPhone', 'monthlyFeePaid'])
+        && data.keys().size() == 7
+        && data.id is string && data.id.size() <= 64
+        && data.nis is string && data.nis.size() <= 32
+        && data.name is string && data.name.size() <= 128
+        && data.className is string && data.className.size() <= 64
+        && data.parentName is string && data.parentName.size() <= 128
+        && data.parentPhone is string && data.parentPhone.size() <= 32
+        && data.monthlyFeePaid is map;
+    }
+
+    // 2. DIPA CATEGORIES COLLECTION
+    match /dipaCategories/{dipaId} {
+      allow read, list: if isVerifiedUser();
+      allow create: if isVerifiedUser() 
+        && isValidId(dipaId) 
+        && isValidDipaCategory(incoming())
+        && incoming().id == dipaId;
+      allow update: if isVerifiedUser()
+        && isValidDipaCategory(incoming())
+        && incoming().id == existing().id
+        && incoming().code == existing().code;
+      allow delete: if isVerifiedUser();
+    }
+
+    function isValidDipaCategory(data) {
+      return data.keys().hasAll(['id', 'code', 'name', 'allocatedAmount', 'realizedAmount'])
+        && data.keys().size() == 5
+        && data.id is string && data.id.size() <= 64
+        && data.code is string && data.code.size() <= 16
+        && data.name is string && data.name.size() <= 200
+        && data.allocatedAmount is number && data.allocatedAmount >= 0
+        && data.realizedAmount is number && data.realizedAmount >= 0;
+    }
+
+    // 3. TRANSACTIONS LEDGER
+    match /transactions/{txId} {
+      allow read, list: if isVerifiedUser();
+      allow create: if isVerifiedUser() 
+        && isValidId(txId) 
+        && isValidTransaction(incoming())
+        && incoming().id == txId;
+      allow update: if isVerifiedUser()
+        && isValidTransaction(incoming())
+        && incoming().id == existing().id;
+      allow delete: if isVerifiedUser();
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['id', 'type', 'category', 'amount', 'date', 'description'])
+        && data.id is string && data.id.size() <= 128
+        && (data.type == 'masuk' || data.type == 'keluar')
+        && data.category is string && data.category.size() <= 250
+        && data.amount is number && data.amount >= 0
+        // Accept common ISO strings or short date strings
+        && data.date is string && data.date.size() <= 32
+        && data.description is string && data.description.size() <= 1000
+        && (!('refId' in data) || (data.refId is string && data.refId.size() <= 64))
+        && (!('paymentMonth' in data) || (data.paymentMonth is string && data.paymentMonth.size() <= 32));
+    }
+
+    // 4. NOTIFICATION LOGS COLLECTION
+    match /notificationLogs/{logId} {
+      allow read, list: if isVerifiedUser();
+      allow create: if isVerifiedUser() 
+        && isValidId(logId) 
+        && isValidNotificationLog(incoming())
+        && incoming().id == logId;
+      allow update: if isVerifiedUser()
+        && isValidNotificationLog(incoming())
+        && incoming().id == existing().id;
+      allow delete: if isVerifiedUser();
+    }
+
+    function isValidNotificationLog(data) {
+      return data.keys().hasAll(['id', 'studentId', 'studentName', 'parentName', 'parentPhone', 'month', 'amount', 'sentAt', 'status', 'message'])
+        && data.keys().size() == 10
+        && data.id is string && data.id.size() <= 128
+        && data.studentId is string && data.studentId.size() <= 64
+        && data.studentName is string && data.studentName.size() <= 128
+        && data.parentName is string && data.parentName.size() <= 128
+        && data.parentPhone is string && data.parentPhone.size() <= 32
+        && data.month is string && data.month.size() <= 32
+        && data.amount is number && data.amount >= 0
+        && data.sentAt is string && data.sentAt.size() <= 64
+        && (data.status == 'sukses' || data.status == 'gagal')
+        && data.message is string && data.message.size() <= 1000;
+    }
+  }
+}

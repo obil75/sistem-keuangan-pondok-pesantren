@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student record of pesantren with fee payment status per month",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the student" },
+        "nis": { "type": "string", "description": "Nomor Induk Santri (NIS)" },
+        "name": { "type": "string", "description": "Full name of the student" },
+        "className": { "type": "string", "description": "Class name/grade" },
+        "parentName": { "type": "string", "description": "Parent or guardian name" },
+        "parentPhone": { "type": "string", "description": "Parent phone number in International WhatsApp format" },
+        "monthlyFeePaid": { "type": "object", "description": "Key-value pair of months and payment status" }
+      },
+      "required": ["id", "nis", "name", "className", "parentName", "parentPhone", "monthlyFeePaid"]
+    },
+    "DipaCategory": {
+      "title": "DipaCategory",
+      "description": "DIPA Alokasi Belanja Category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the category" },
+        "code": { "type": "string", "description": "DIPA Account Code (Kode Akun)" },
+        "name": { "type": "string", "description": "Name of the sub-budget channel" },
+        "allocatedAmount": { "type": "number", "description": "Planned allocation budget (Pagu)" },
+        "realizedAmount": { "type": "number", "description": "Amount already consumed or realized" }
+      },
+      "required": ["id", "code", "name", "allocatedAmount", "realizedAmount"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A single cash movement in the general cash ledger",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique transaction ID" },
+        "type": { "type": "string", "enum": ["masuk", "keluar"], "description": "Type of transaction" },
+        "category": { "type": "string", "description": "DIPA Category name or Iuran Santri" },
+        "amount": { "type": "number", "description": "Transaction value in Rupiah" },
+        "date": { "type": "string", "description": "YYYY-MM-DD format timestamp" },
+        "description": { "type": "string", "description": "Descriptive logs of cash entry/exit" },
+        "refId": { "type": "string", "description": "Optional linked Student ID for SPP iuran" },
+        "paymentMonth": { "type": "string", "description": "Optional YYYY-MM period of the SPP" }
+      },
+      "required": ["id", "type", "category", "amount", "date", "description"]
+    },
+    "NotificationLog": {
+      "title": "NotificationLog",
+      "description": "Historical log of dispatching WA reminders to parents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Notification ID" },
+        "studentId": { "type": "string", "description": "Linked student ID" },
+        "studentName": { "type": "string", "description": "Associated student name" },
+        "parentName": { "type": "string", "description": "Beneficiary parent name" },
+        "parentPhone": { "type": "string", "description": "Beneficiary Whatsapp number" },
+        "month": { "type": "string", "description": "Arrears month period YYYY-MM" },
+        "amount": { "type": "number", "description": "Outstanding amount represented" },
+        "sentAt": { "type": "string", "description": "ISO timestamp for successful sent operations" },
+        "status": { "type": "string", "enum": ["sukses", "gagal"], "description": "Audit outcome status" },
+        "message": { "type": "string", "description": "The exact content dispatched" }
+      },
+      "required": ["id", "studentId", "studentName", "parentName", "parentPhone", "month", "amount", "sentAt", "status", "message"]
+    }
+  },
+  "firestore": {
+    "students": {
+      "schema": "Student",
+      "description": "Complete student database of Daarul Al-Hambra"
+    },
+    "dipaCategories": {
+      "schema": "DipaCategory",
+      "description": "Budget allocations and plans"
+    },
+    "transactions": {
+      "schema": "Transaction",
+      "description": "General Ledger Transactions (debit / credit logs)"
+    },
+    "notificationLogs": {
+      "schema": "NotificationLog",
+      "description": "Reminders dispatch logs archive"
+    }
+  }
+}

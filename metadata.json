@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Keuangan Pondok Pesantren",
+  "description": "Aplikasi manajemen keuangan Pondok Pesantren dengan iuran santri, alokasi DIPA, laporan bulanan/tahunan, dan notifikasi tunggakan otomatis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
