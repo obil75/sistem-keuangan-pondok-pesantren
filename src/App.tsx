@@ -10,7 +10,6 @@ import {
   Users, 
   FileText, 
   History, 
-  BellRing, 
   LineChart, 
   Database, 
   Menu, 
@@ -20,7 +19,8 @@ import {
   DollarSign,
   Briefcase,
   AlertCircle,
-  LogOut
+  LogOut,
+  Settings
 } from 'lucide-react';
 
 // Firebase core configuration
@@ -34,7 +34,10 @@ import {
   subscribeToTransactions, 
   subscribeToNotificationLogs,
   addTransactionToFirestore,
+  updateTransactionInFirestore,
+  deleteTransactionFromFirestore,
   updateStudentsInFirestore,
+  deleteStudentFromFirestore,
   updateDipaListInFirestore,
   addNotificationLogsToFirestore,
   clearNotificationLogsInFirestore
@@ -52,6 +55,8 @@ import DipaManagement from './components/DipaManagement';
 import Transactions from './components/Transactions';
 import Notifications from './components/Notifications';
 import Reports from './components/Reports';
+import Referensi from './components/Referensi';
+import SistemBackup from './components/SistemBackup';
 
 export default function App() {
   // Navigation
@@ -64,6 +69,41 @@ export default function App() {
   const [dipaCategories, setDipaCategories] = useState<DipaCategory[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [notificationQueue, setNotificationQueue] = useState<NotificationLog[]>([]);
+
+  // Referensi State
+  const [jumlahIuran, setJumlahIuran] = useState<number>(() => {
+    const saved = localStorage.getItem('sikeu_jumlah_iuran');
+    return saved ? parseInt(saved, 10) : 750000;
+  });
+  const [iuranMap, setIuranMap] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('sikeu_iuran_map');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error parsing sikeu_iuran_map', e);
+      }
+    }
+    return {};
+  });
+  const [pengelola1Nama, setPengelola1Nama] = useState<string>(() => {
+    return localStorage.getItem('sikeu_pengelola_1_nama') || localStorage.getItem('sikeu_pengelola_nama') || 'Ust. Arsyad Hambali';
+  });
+  const [pengelola1Jabatan, setPengelola1Jabatan] = useState<string>(() => {
+    return localStorage.getItem('sikeu_pengelola_1_jabatan') || localStorage.getItem('sikeu_pengelola_jabatan') || 'Bendahara Utama';
+  });
+  const [pengelola2Nama, setPengelola2Nama] = useState<string>(() => {
+    return localStorage.getItem('sikeu_pengelola_2_nama') || 'Ust. Ahmad Syihabuddin, Lc.';
+  });
+  const [pengelola2Jabatan, setPengelola2Jabatan] = useState<string>(() => {
+    return localStorage.getItem('sikeu_pengelola_2_jabatan') || 'Dewan Pengawas Pesantren';
+  });
+  const [pengelola3Nama, setPengelola3Nama] = useState<string>(() => {
+    return localStorage.getItem('sikeu_pengelola_3_nama') || 'Haj. Fatimah Azzahra, S.E.';
+  });
+  const [pengelola3Jabatan, setPengelola3Jabatan] = useState<string>(() => {
+    return localStorage.getItem('sikeu_pengelola_3_jabatan') || 'Kepala Bagian Keuangan';
+  });
 
   // Auth & Seeding states
   const [user, setUser] = useState<User | null>(null);
@@ -152,12 +192,39 @@ export default function App() {
     }
   };
 
+  // Update existing Transaction
+  const handleUpdateTransaction = async (tx: Transaction, updatedStudents?: Student[], updatedDipa?: DipaCategory[]) => {
+    try {
+      await updateTransactionInFirestore(tx, updatedStudents, updatedDipa);
+    } catch (e) {
+      alert("Gagal memperbarui transaksi ke cloud: " + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  // Delete existing Transaction
+  const handleDeleteTransaction = async (txId: string, updatedStudents?: Student[], updatedDipa?: DipaCategory[]) => {
+    try {
+      await deleteTransactionFromFirestore(txId, updatedStudents, updatedDipa);
+    } catch (e) {
+      alert("Gagal menghapus transaksi dari cloud: " + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
   // Update students listing in main db
   const handleUpdateStudents = async (updated: Student[]) => {
     try {
       await updateStudentsInFirestore(updated);
     } catch (e) {
       alert("Gagal memperbarui data santri di cloud: " + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  // Delete student in main db
+  const handleDeleteStudent = async (studentId: string) => {
+    try {
+      await deleteStudentFromFirestore(studentId);
+    } catch (e) {
+      alert("Gagal menghapus data santri di cloud: " + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -207,6 +274,35 @@ export default function App() {
     }
   };
 
+  const handleSaveReferensi = (params: {
+    jumlahIuran: number;
+    iuranMap: Record<string, number>;
+    pengelola1Nama: string;
+    pengelola1Jabatan: string;
+    pengelola2Nama: string;
+    pengelola2Jabatan: string;
+    pengelola3Nama: string;
+    pengelola3Jabatan: string;
+  }) => {
+    localStorage.setItem('sikeu_jumlah_iuran', params.jumlahIuran.toString());
+    localStorage.setItem('sikeu_iuran_map', JSON.stringify(params.iuranMap));
+    localStorage.setItem('sikeu_pengelola_1_nama', params.pengelola1Nama);
+    localStorage.setItem('sikeu_pengelola_1_jabatan', params.pengelola1Jabatan);
+    localStorage.setItem('sikeu_pengelola_2_nama', params.pengelola2Nama);
+    localStorage.setItem('sikeu_pengelola_2_jabatan', params.pengelola2Jabatan);
+    localStorage.setItem('sikeu_pengelola_3_nama', params.pengelola3Nama);
+    localStorage.setItem('sikeu_pengelola_3_jabatan', params.pengelola3Jabatan);
+
+    setJumlahIuran(params.jumlahIuran);
+    setIuranMap(params.iuranMap);
+    setPengelola1Nama(params.pengelola1Nama);
+    setPengelola1Jabatan(params.pengelola1Jabatan);
+    setPengelola2Nama(params.pengelola2Nama);
+    setPengelola2Jabatan(params.pengelola2Jabatan);
+    setPengelola3Nama(params.pengelola3Nama);
+    setPengelola3Jabatan(params.pengelola3Jabatan);
+  };
+
 
   // Render current active layout
   const renderTabContent = () => {
@@ -218,6 +314,8 @@ export default function App() {
             dipaCategories={dipaCategories} 
             transactions={transactions} 
             onNavigate={(tab) => handleNavigateWithContext(tab)} 
+            pricePerStudent={jumlahIuran}
+            iuranMap={iuranMap}
           />
         );
       case 'santri':
@@ -225,7 +323,9 @@ export default function App() {
           <StudentList 
             students={students} 
             onUpdateStudents={handleUpdateStudents}
+            onDeleteStudent={handleDeleteStudent}
             onNavigateToTab={handleNavigateWithContext}
+            pricePerStudent={jumlahIuran}
           />
         );
       case 'dipa':
@@ -233,6 +333,16 @@ export default function App() {
           <DipaManagement 
             dipaCategories={dipaCategories} 
             onUpdateDipa={handleUpdateDipa} 
+            students={students}
+            transactions={transactions}
+            pricePerStudent={jumlahIuran}
+            iuranMap={iuranMap}
+            pengelola1Nama={pengelola1Nama}
+            pengelola1Jabatan={pengelola1Jabatan}
+            pengelola2Nama={pengelola2Nama}
+            pengelola2Jabatan={pengelola2Jabatan}
+            pengelola3Nama={pengelola3Nama}
+            pengelola3Jabatan={pengelola3Jabatan}
           />
         );
       case 'transaksi':
@@ -242,16 +352,16 @@ export default function App() {
             students={students} 
             dipaCategories={dipaCategories} 
             onAddTransaction={handleAddTransaction} 
-          />
-        );
-      case 'notifikasi':
-        return (
-          <Notifications 
-            students={students} 
-            notificationQueue={notificationQueue}
-            onAddNotificationLogs={handleAddNotificationLogs}
-            onClearNotificationLogs={handleClearNotificationLogs}
-            initialState={navState}
+            onUpdateTransaction={handleUpdateTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
+            pricePerStudent={jumlahIuran}
+            iuranMap={iuranMap}
+            pengelola1Nama={pengelola1Nama}
+            pengelola1Jabatan={pengelola1Jabatan}
+            pengelola2Nama={pengelola2Nama}
+            pengelola2Jabatan={pengelola2Jabatan}
+            pengelola3Nama={pengelola3Nama}
+            pengelola3Jabatan={pengelola3Jabatan}
           />
         );
       case 'laporan':
@@ -260,6 +370,78 @@ export default function App() {
             students={students} 
             dipaCategories={dipaCategories} 
             transactions={transactions} 
+            pengelola1Nama={pengelola1Nama}
+            pengelola1Jabatan={pengelola1Jabatan}
+            pengelola2Nama={pengelola2Nama}
+            pengelola2Jabatan={pengelola2Jabatan}
+            pengelola3Nama={pengelola3Nama}
+            pengelola3Jabatan={pengelola3Jabatan}
+          />
+        );
+      case 'referensi':
+        return (
+          <Referensi
+            jumlahIuran={jumlahIuran}
+            iuranMap={iuranMap}
+            pengelola1Nama={pengelola1Nama}
+            pengelola1Jabatan={pengelola1Jabatan}
+            pengelola2Nama={pengelola2Nama}
+            pengelola2Jabatan={pengelola2Jabatan}
+            pengelola3Nama={pengelola3Nama}
+            pengelola3Jabatan={pengelola3Jabatan}
+            onSave={handleSaveReferensi}
+          />
+        );
+      case 'sistem':
+        return (
+          <SistemBackup
+            students={students}
+            dipaCategories={dipaCategories}
+            transactions={transactions}
+            notificationQueue={notificationQueue}
+            jumlahIuran={jumlahIuran}
+            iuranMap={iuranMap}
+            pengelola1Nama={pengelola1Nama}
+            pengelola1Jabatan={pengelola1Jabatan}
+            pengelola2Nama={pengelola2Nama}
+            pengelola2Jabatan={pengelola2Jabatan}
+            pengelola3Nama={pengelola3Nama}
+            pengelola3Jabatan={pengelola3Jabatan}
+            onUpdateStates={(payload) => {
+              if (payload.jumlahIuran !== undefined) {
+                setJumlahIuran(payload.jumlahIuran);
+                localStorage.setItem('sikeu_jumlah_iuran', payload.jumlahIuran.toString());
+              }
+              if (payload.iuranMap !== undefined) {
+                setIuranMap(payload.iuranMap);
+                localStorage.setItem('sikeu_iuran_map', JSON.stringify(payload.iuranMap));
+              }
+              if (payload.pengelola1Nama !== undefined) {
+                setPengelola1Nama(payload.pengelola1Nama);
+                localStorage.setItem('sikeu_pengelola_1_nama', payload.pengelola1Nama);
+              }
+              if (payload.pengelola1Jabatan !== undefined) {
+                setPengelola1Jabatan(payload.pengelola1Jabatan);
+                localStorage.setItem('sikeu_pengelola_1_jabatan', payload.pengelola1Jabatan);
+              }
+              if (payload.pengelola2Nama !== undefined) {
+                setPengelola2Nama(payload.pengelola2Nama);
+                localStorage.setItem('sikeu_pengelola_2_nama', payload.pengelola2Nama);
+              }
+              if (payload.pengelola2Jabatan !== undefined) {
+                setPengelola2Jabatan(payload.pengelola2Jabatan);
+                localStorage.setItem('sikeu_pengelola_2_jabatan', payload.pengelola2Jabatan);
+              }
+              if (payload.pengelola3Nama !== undefined) {
+                setPengelola3Nama(payload.pengelola3Nama);
+                localStorage.setItem('sikeu_pengelola_3_nama', payload.pengelola3Nama);
+              }
+              if (payload.pengelola3Jabatan !== undefined) {
+                setPengelola3Jabatan(payload.pengelola3Jabatan);
+                localStorage.setItem('sikeu_pengelola_3_jabatan', payload.pengelola3Jabatan);
+              }
+            }}
+            onResetDb={handleResetDb}
           />
         );
       default:
@@ -287,7 +469,7 @@ export default function App() {
           <div className="space-y-2">
             <h3 className="text-lg font-serif font-bold text-[#2C2C24]">Inisialisasi Cloud Ledger</h3>
             <p className="text-xs text-[#7A7A6A] leading-relaxed">
-              Pesantren Daarul Al-Hambra mendeteksi database cloud baru. Mengunggah data awal induk santri, pagu DIPA, dan arus kas historis secara real-time.
+              Pesantren Modern Datok Sulaiman Kota Palopo mendeteksi database cloud baru. Mengunggah data awal induk santri, pagu DIPA, dan arus kas historis secara real-time.
             </p>
           </div>
           <div className="py-2.5 px-4 bg-[#F7F5F0] border border-[#D9D3C7] rounded-xl text-[10px] font-mono font-bold text-[#5A5A40]">
@@ -310,7 +492,7 @@ export default function App() {
             </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-serif font-bold text-[#2C2C24]">SIKEU Pesantren</h1>
-              <p className="text-xs font-bold font-sans uppercase tracking-widest text-[#7A7A6A]">Keuangan & SPP Daarul Al-Hambra</p>
+              <p className="text-xs font-bold font-sans uppercase tracking-widest text-[#7A7A6A]">Keuangan & SPP Datok Sulaiman Kota Palopo</p>
             </div>
           </div>
 
@@ -447,26 +629,6 @@ export default function App() {
               <span>Buku Jurnal Kas</span>
             </button>
 
-            {/* Notifications alerts queue link */}
-            <button
-              onClick={() => handleNavigateWithContext('notifikasi')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer border ${
-                activeTab === 'notifikasi' 
-                  ? 'bg-[#F7F5F0] text-[#5A5A40] border-[#D9D3C7] shadow-xs' 
-                  : 'text-[#3D3D3D] opacity-75 hover:opacity-100 hover:bg-[#E2DDD5]/60 border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <BellRing className={`w-4 h-4 shrink-0 ${activeTab === 'notifikasi' ? 'text-[#5A5A40]' : 'text-[#7A7A6A]'}`} />
-                <span>Notifikasi Tunggakan</span>
-              </div>
-              {sidebarAlerts > 0 && (
-                <span className="text-[10px] font-mono font-bold bg-[#A66E4E] text-white px-2 py-0.5 rounded-full animate-pulse">
-                  {sidebarAlerts}
-                </span>
-              )}
-            </button>
-
             {/* Financial Audits Report printing link */}
             <button
               onClick={() => handleNavigateWithContext('laporan')}
@@ -479,6 +641,21 @@ export default function App() {
               <LineChart className={`w-4 h-4 shrink-0 ${activeTab === 'laporan' ? 'text-[#5A5A40]' : 'text-[#7A7A6A]'}`} />
               <span>Laporan Akuntansi</span>
             </button>
+
+            {/* Referensi Settings Link */}
+            <button
+              onClick={() => handleNavigateWithContext('referensi')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer border ${
+                activeTab === 'referensi' 
+                  ? 'bg-[#F7F5F0] text-[#5A5A40] border-[#D9D3C7] shadow-xs' 
+                  : 'text-[#3D3D3D] opacity-75 hover:opacity-100 hover:bg-[#E2DDD5]/60 border-transparent'
+              }`}
+            >
+              <Settings className={`w-4 h-4 shrink-0 ${activeTab === 'referensi' ? 'text-[#5A5A40]' : 'text-[#7A7A6A]'}`} />
+              <span>Referensi</span>
+            </button>
+
+
 
           </nav>
         </div>
@@ -528,8 +705,6 @@ export default function App() {
               <Menu className="w-6 h-6" />
             </button>
             <div className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-[#7A7A6A] uppercase tracking-widest font-sans">
-              <span>Keuangan Pesantren</span>
-              <span>/</span>
               <span className="text-[#5A5A40] text-xs font-serif italic font-semibold">{activeTab}</span>
             </div>
           </div>

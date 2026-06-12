@@ -16,7 +16,6 @@ import {
   ChevronLeft, 
   ChevronRight,
   UserCheck,
-  PhoneCall,
   Save,
   Trash2,
   FileSpreadsheet,
@@ -24,7 +23,9 @@ import {
   Download,
   AlertTriangle,
   Check,
-  Loader2
+  Loader2,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { Student } from '../types';
 import { formatRupiah } from '../utils/financeHelpers';
@@ -32,7 +33,9 @@ import { formatRupiah } from '../utils/financeHelpers';
 interface StudentListProps {
   students: Student[];
   onUpdateStudents: (updated: Student[]) => void;
+  onDeleteStudent?: (studentId: string) => void;
   onNavigateToTab: (tab: string, state?: any) => void;
+  pricePerStudent?: number;
 }
 
 const CLASSES = [
@@ -47,7 +50,7 @@ const CLASSES = [
 const MONTHS = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06'];
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun'];
 
-export default function StudentList({ students, onUpdateStudents, onNavigateToTab }: StudentListProps) {
+export default function StudentList({ students, onUpdateStudents, onDeleteStudent, onNavigateToTab, pricePerStudent = 750000 }: StudentListProps) {
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('All');
@@ -61,6 +64,7 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
   // Edit fields modal state
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 
   // Excel Import states
   const [isImporting, setIsImporting] = useState(false);
@@ -85,12 +89,10 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
   // Filter & Search logic
   const filteredStudents = useMemo(() => {
     return students.filter((student) => {
-      // 1. Search term (NIS, name, parent phone, parent name)
+      // 1. Search term (NIS, name)
       const matchesSearch = 
         student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.nis.includes(searchTerm) ||
-        student.parentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.parentPhone.includes(searchTerm);
+        student.nis.includes(searchTerm);
 
       // 2. Class filter
       const matchesClass = selectedClass === 'All' || student.className === selectedClass;
@@ -136,6 +138,77 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
       return s;
     });
     onUpdateStudents(updated);
+  };
+
+  // Toggle active / non-active (keluar) status
+  const handleToggleActive = (studentId: string) => {
+    const updated = students.map((s) => {
+      if (s.id === studentId) {
+        return {
+          ...s,
+          isActive: s.isActive === false ? true : false,
+        };
+      }
+      return s;
+    });
+    onUpdateStudents(updated);
+  };
+
+  // Backup Student Database and Payment Recap
+  const handleBackupData = () => {
+    const headers = [
+      "No",
+      "NIS",
+      "Nama Lengkap",
+      "Kelas / Jenjang",
+      "Januari 2026",
+      "Februari 2026",
+      "Maret 2026",
+      "April 2026",
+      "Mei 2026",
+      "Juni 2026",
+    ];
+
+    const rows = students.map((s, index) => [
+      index + 1,
+      s.nis,
+      s.name,
+      s.className,
+      s.monthlyFeePaid['2026-01'] ? 'LUNAS' : 'BELUM',
+      s.monthlyFeePaid['2026-02'] ? 'LUNAS' : 'BELUM',
+      s.monthlyFeePaid['2026-03'] ? 'LUNAS' : 'BELUM',
+      s.monthlyFeePaid['2026-04'] ? 'LUNAS' : 'BELUM',
+      s.monthlyFeePaid['2026-05'] ? 'LUNAS' : 'BELUM',
+      s.monthlyFeePaid['2026-06'] ? 'LUNAS' : 'BELUM',
+    ]);
+
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    ws['!cols'] = [
+      { wch: 6 },  // No
+      { wch: 15 }, // NIS
+      { wch: 30 }, // Nama Lengkap
+      { wch: 25 }, // Kelas / Jenjang
+      { wch: 14 }, // Jan
+      { wch: 14 }, // Feb
+      { wch: 14 }, // Mar
+      { wch: 14 }, // Apr
+      { wch: 14 }, // Mei
+      { wch: 14 }  // Jun
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Backup Data Santri");
+
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const formattedDate = `${dd}-${mm}-${yyyy}`;
+    const filename = `[BACKUP] - [${formattedDate}].xlsx`;
+
+    XLSX.writeFile(wb, filename);
   };
 
   // Download Excel Template
@@ -386,7 +459,7 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
       name: '',
       className: CLASSES[0],
       parentName: '',
-      parentPhone: '6281',
+      parentPhone: '-',
     });
     setEditingStudent(null);
     setIsAddingStudent(true);
@@ -395,7 +468,7 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
   // Save edit or new student
   const handleSaveStudent = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.nis.trim() || !formData.parentPhone.trim()) {
+    if (!formData.name.trim() || !formData.nis.trim()) {
       alert('Harap isi semua kolom wajib!');
       return;
     }
@@ -408,7 +481,7 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
         name: formData.name,
         className: formData.className,
         parentName: formData.parentName || `Bp/Ibu ${formData.name}`,
-        parentPhone: formData.parentPhone,
+        parentPhone: formData.parentPhone || '-',
         monthlyFeePaid: {
           '2026-01': true,
           '2026-02': true,
@@ -442,11 +515,23 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
 
   // Delete student with confirmation
   const handleDeleteStudent = (studentId: string) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus data santri ini? Semua riwayat iuran juga akan dihapus.')) {
+    const student = students.find(s => s.id === studentId);
+    if (student) {
+      setStudentToDelete(student);
+    }
+  };
+
+  const confirmDeleteStudent = () => {
+    if (!studentToDelete) return;
+    const studentId = studentToDelete.id;
+    if (onDeleteStudent) {
+      onDeleteStudent(studentId);
+    } else {
       const updated = students.filter(s => s.id !== studentId);
       onUpdateStudents(updated);
-      setEditingStudent(null);
     }
+    setStudentToDelete(null);
+    setEditingStudent(null);
   };
 
   // Quick Action: Mark all students in the filtered view as paid for selected month
@@ -475,7 +560,7 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-xl font-serif font-bold text-[#2C2C24]">Database Santri Pondok Pesantren</h1>
-          <p className="text-xs text-[#7A7A6A] mt-0.5">Kelola data {students.length} santri terdaftar dan pencatatan iuran bulanan Rp 750.000,-.</p>
+          <p className="text-xs text-[#7A7A6A] mt-0.5">Kelola data {students.length} santri terdaftar dan pencatatan status iuran bulanan.</p>
         </div>
         <div className="flex flex-wrap gap-2.5 shrink-0 mt-2 sm:mt-0">
           <button 
@@ -495,13 +580,24 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
             Unduh Templat Excel
           </button>
 
-          <button 
-            onClick={handleOpenCreate}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#5A5A40] hover:bg-[#4A4A34] text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            Registrasi Santri Baru
-          </button>
+          <div className="flex flex-col gap-1.5">
+            <button 
+              onClick={handleOpenCreate}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#5A5A40] hover:bg-[#4A4A34] text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer justify-center"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Registrasi Santri Baru
+            </button>
+
+            <button 
+              onClick={handleBackupData}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#A66E4E] hover:bg-[#915B3B] text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer justify-center"
+              title="Unduh file Excel berisi seluruh database santri dan rekap pembayarannya"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Back Up Data
+            </button>
+          </div>
         </div>
       </div>
 
@@ -513,7 +609,7 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#7A7A6A]" />
             <input 
               type="text"
-              placeholder="Cari Santri (Nama, NIS, Wali, No. WA)..."
+              placeholder="Cari Santri (Nama, NIS)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-[#F7F5F0] border border-[#D9D3C7] rounded-xl text-xs text-[#3D3D3D] focus:outline-none focus:border-[#5A5A40] focus:ring-1 focus:ring-[#5A5A40] transition"
@@ -574,16 +670,6 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-[#7A7A6A]">Ditemukan: <strong>{filteredStudents.length}</strong></span>
-            
-            {paymentFilterStatus === 'Tunggakan' && filteredStudents.length > 0 && (
-              <button
-                onClick={() => onNavigateToTab('notifikasi', { filterClass: selectedClass, filterMonth: paymentFilterMonth })}
-                className="text-[11px] bg-[#FDF4EF] text-[#A66E4E] border border-[#F6DFD0] px-3 py-1 rounded-lg font-bold hover:bg-[#FCEDE4] transition flex items-center gap-1 cursor-pointer"
-              >
-                <PhoneCall className="w-3" />
-                Hubungi {filteredStudents.length} Penunggak
-              </button>
-            )}
 
             {filteredStudents.length > 0 && (
               <button
@@ -609,7 +695,7 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
                 <th className="py-3.5">Nama Lengkap</th>
                 <th className="py-3.5">Kelas / Jenjang</th>
                 <th className="py-3.5 text-center">Rekap Pembayaran (Jan - Jun)</th>
-                <th className="py-3.5 text-center w-24">Aksi</th>
+                <th className="py-3.5 text-center w-32">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F0EFEA] text-xs text-[#3D3D3D]">
@@ -623,14 +709,18 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
               ) : (
                 paginatedStudents.map((student, index) => {
                   const num = (currentPage - 1) * itemsPerPage + index + 1;
+                  const isActive = student.isActive !== false;
                   return (
-                    <tr key={student.id} className="hover:bg-[#F7F5F0]/60 transition group">
+                    <tr key={student.id} className={`transition group ${isActive ? 'hover:bg-[#F7F5F0]/60' : 'bg-gray-50/50 hover:bg-gray-50 opacity-65'}`}>
                       <td className="py-3 pl-4 text-center text-[#7A7A6A] font-medium">{num}</td>
-                      <td className="py-3 pl-2 font-mono text-[#7A7A6A]">{student.nis}</td>
-                      <td className="py-3 font-semibold text-[#2C2C24] group-hover:text-[#5A5A40] transition">
+                      <td className={`py-3 pl-2 font-mono ${isActive ? 'text-[#7A7A6A]' : 'text-slate-300'}`}>{student.nis}</td>
+                      <td className={`py-3 font-semibold transition ${isActive ? 'text-[#2C2C24] group-hover:text-[#5A5A40]' : 'text-slate-400 line-through'}`}>
                         {student.name}
+                        {!isActive && (
+                          <span className="text-[10px] font-normal text-rose-600 no-underline italic ml-1.5 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">Keluar</span>
+                        )}
                       </td>
-                      <td className="py-3 text-[#3D3D3D]">{student.className}</td>
+                      <td className={`py-3 ${isActive ? 'text-[#3D3D3D]' : 'text-slate-400 font-normal'}`}>{student.className}</td>
                       <td className="py-3">
                         {/* Interactive Month-by-month Checkbox Grid */}
                         <div className="flex justify-center gap-1.5">
@@ -655,14 +745,43 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
                           })}
                         </div>
                       </td>
-                      <td className="py-3 text-center">
-                        <button
-                          onClick={() => handleOpenEdit(student)}
-                          className="p-1.5 text-[#5A5A40] hover:text-[#4A4A34] hover:bg-[#EBE7DF] rounded-lg transition mr-2 cursor-pointer"
-                          title="Edit Profil"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
+                      <td className="py-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* Left: Checklist Icon */}
+                          <button
+                            onClick={() => handleToggleActive(student.id)}
+                            className={`p-1.5 rounded-lg transition cursor-pointer ${
+                              isActive 
+                                ? 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50' 
+                                : 'text-gray-400 hover:text-gray-650 hover:bg-gray-100'
+                            }`}
+                            title={isActive ? "Tandai Non-Aktif (Keluar)" : "Tandai Aktif Kembali"}
+                          >
+                            {isActive ? (
+                              <CheckSquare className="w-4 h-4" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </button>
+
+                          {/* Middle: Pencil Icon (Edit) */}
+                          <button
+                            onClick={() => handleOpenEdit(student)}
+                            className="p-1.5 text-[#5A5A40] hover:text-[#4A4A34] hover:bg-[#EBE7DF] rounded-lg transition cursor-pointer"
+                            title="Edit Profil"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          {/* Right: Trash Empty Icon (Delete) */}
+                          <button
+                            onClick={() => handleDeleteStudent(student.id)}
+                            className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Hapus Santri"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -755,35 +874,6 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
                     <option key={cls} value={cls}>{cls}</option>
                   ))}
                 </select>
-              </div>
-
-              {/* Parent Name */}
-              <div className="space-y-1">
-                <label className="font-bold text-[#3D3D3D]">Nama Orang Tua / Wali *</label>
-                <input 
-                  type="text" 
-                  required
-                  value={formData.parentName} 
-                  onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
-                  placeholder="Nama Ibu / Bapak / Wali santri..."
-                  className="w-full px-3 py-2 bg-[#F7F5F0] border border-[#D9D3C7] rounded-xl focus:border-[#5A5A40] focus:outline-none"
-                />
-              </div>
-
-              {/* Parent Phone */}
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="font-bold text-[#3D3D3D]">No. HP / WhatsApp Orang Tua *</label>
-                  <span className="text-[10px] text-gray-400">Format KD Negara, contoh: 62812xxx</span>
-                </div>
-                <input 
-                  type="text" 
-                  required
-                  value={formData.parentPhone} 
-                  onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
-                  placeholder="628123456789"
-                  className="w-full px-3 py-2 bg-[#F7F5F0] border border-[#D9D3C7] rounded-xl focus:border-[#5A5A40] focus:outline-none font-mono"
-                />
               </div>
 
               {/* Footer Buttons */}
@@ -1012,6 +1102,71 @@ export default function StudentList({ students, onUpdateStudents, onNavigateToTa
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Konfirmasi Proses Impor
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {studentToDelete && (
+        <div className="fixed inset-0 bg-[#3d3d2f]/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-sm bg-white rounded-[24px] shadow-2xl border border-[#E5E1DA] overflow-hidden"
+          >
+            <div className="bg-rose-50 border-b border-rose-100 p-5 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-3">
+                <Trash2 className="w-6 h-6 animate-pulse" />
+              </div>
+              <h3 className="text-sm font-bold text-rose-900 uppercase tracking-wide font-sans">
+                Konfirmasi Hapus Santri
+              </h3>
+              <p className="text-[11px] text-rose-700 mt-1 leading-snug">
+                Tindakan ini akan menghapus data santri secara permanen dari pangkalan basis data cloud.
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-gray-700">
+              <div className="bg-[#F7F5F0] border border-[#D9D3C7] rounded-xl p-3.5 space-y-1.5 leading-relaxed">
+                <div className="flex justify-between">
+                  <span className="text-gray-500 font-medium">Nama Santri:</span>
+                  <span className="font-bold text-[#2C2C24]">{studentToDelete.name}</span>
+                </div>
+                <div className="flex justify-between font-mono text-[11px]">
+                  <span className="text-gray-500 font-medium">NIS:</span>
+                  <span className="text-slate-700 font-bold">{studentToDelete.nis}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 font-medium">Kelas:</span>
+                  <span className="font-semibold text-slate-700">{studentToDelete.className}</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-[#7A7A6A] leading-normal text-center bg-amber-50 rounded-lg p-2.5 border border-amber-100 flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span>
+                  Seluruh riwayat status iuran (SPP bulanan) atas nama santri ini juga akan dihapus.
+                </span>
+              </p>
+
+              <div className="flex gap-2 pt-3 border-t border-[#F0EFEA]">
+                <button
+                  type="button"
+                  onClick={() => setStudentToDelete(null)}
+                  className="w-1/2 px-4 py-2 text-xs font-bold text-[#7A7A6A] bg-white border border-[#D9D3C7] rounded-xl hover:bg-[#F7F5F0] transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteStudent}
+                  className="w-1/2 px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Check className="w-4 h-4" />
+                  Hapus Permanen
                 </button>
               </div>
             </div>

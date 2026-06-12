@@ -26,15 +26,23 @@ interface DashboardProps {
   dipaCategories: DipaCategory[];
   transactions: Transaction[];
   onNavigate: (tab: string) => void;
+  pricePerStudent?: number;
+  iuranMap?: Record<string, number>;
 }
 
-export default function Dashboard({ students, dipaCategories, transactions, onNavigate }: DashboardProps) {
+export default function Dashboard({ students, dipaCategories, transactions, onNavigate, pricePerStudent = 750000, iuranMap }: DashboardProps) {
   const currentMonth = '2026-06';
   
   // Calculate stats
   const stats = useMemo(() => {
-    return calculateStats(students, dipaCategories, transactions, currentMonth);
-  }, [students, dipaCategories, transactions, currentMonth]);
+    return calculateStats(students, dipaCategories, transactions, currentMonth, pricePerStudent, iuranMap);
+  }, [students, dipaCategories, transactions, currentMonth, pricePerStudent, iuranMap]);
+
+  const getPrice = (m: string) => (iuranMap && iuranMap[m] !== undefined ? iuranMap[m] : pricePerStudent);
+  const MONTHS_LIST = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06'];
+  const totalIuran6Bulan = useMemo(() => {
+    return MONTHS_LIST.reduce((acc, m) => acc + getPrice(m), 0);
+  }, [iuranMap, pricePerStudent]);
 
   // Compute DIPA budget usage rates
   const dipaRealizationSummary = useMemo(() => {
@@ -88,10 +96,6 @@ export default function Dashboard({ students, dipaCategories, transactions, onNa
       recommendations.push('Perketat kebijakan belanja dinas non-operasional untuk mendongkrak sisa dana.');
     }
 
-    if (stats.sppTunggakanCount > 150) {
-      recommendations.push(`Terdapat ${stats.sppTunggakanCount} santri menunggak di bulan ini. Segera optimalkan sistem pengiriman notifikasi otomatis.`);
-    }
-
     return {
       healthIndex: Math.round(healthIndex),
       statusText,
@@ -107,18 +111,12 @@ export default function Dashboard({ students, dipaCategories, transactions, onNa
       {/* Welcome Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#5A5A40] text-white p-6 rounded-3xl shadow-sm border border-[#4A4A34]">
         <div>
-          <h1 className="text-2xl font-serif italic text-white font-semibold">Portal Keuangan Pesantren</h1>
+          <h1 className="text-2xl font-serif italic text-white font-semibold">Manajemen Keuangan</h1>
           <p className="text-[#EBE7DF] text-xs tracking-wide mt-1">
-            Data statistik komprehensif Pondok Pesantren per <span className="font-semibold underline underline-offset-2">{getMonthName(currentMonth)}</span>.
+            Pesantren Modern Datok Sulaiman Kota Palopo
           </p>
         </div>
         <div className="flex gap-3">
-          <button 
-            onClick={() => onNavigate('notifikasi')}
-            className="px-4 py-2 bg-[#F7F5F0] text-[#5A5A40] rounded-xl text-xs font-bold hover:bg-white transition shadow-sm cursor-pointer border border-[#D9D3C7]"
-          >
-            Kirim Tagihan Tunggakan
-          </button>
           <button 
             onClick={() => onNavigate('transaksi')}
             className="px-4 py-2 bg-[#A66E4E] hover:bg-[#925F41] text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer border border-[#925F41]"
@@ -144,9 +142,11 @@ export default function Dashboard({ students, dipaCategories, transactions, onNa
           <div>
             <p className="text-[10px] uppercase tracking-wider text-[#7A7A6A] font-bold">Total Dana Masuk</p>
             <h3 className="text-md font-serif font-bold mt-1 text-[#2C2C24]">{formatRupiah(stats.totalMasuk)}</h3>
-            <span className="text-[9px] text-[#5A5A40] bg-[#EBE7DF] px-2 py-0.5 rounded-md font-semibold mt-1.5 inline-block">
-              Kumulatif Berjalan
-            </span>
+            <div className="mt-1 space-y-0.5 leading-tight">
+              <p className="text-[9px] text-[#5A5A40] font-bold">
+                Iuran Santri dan Sumber Lainnya
+              </p>
+            </div>
           </div>
         </motion.div>
 
@@ -257,7 +257,7 @@ export default function Dashboard({ students, dipaCategories, transactions, onNa
                   <CheckCircle className="w-4 h-4" />
                   {stats.sppLunasCount}
                 </span>
-                <p className="text-[11px] text-[#7A7A6A] mt-0.5">Lunas (750k/bln)</p>
+                <p className="text-[11px] text-[#7A7A6A] mt-0.5 font-bold">Lunas ({getPrice(currentMonth) >= 1000 ? `${getPrice(currentMonth) / 1000}k` : getPrice(currentMonth)}/bln)</p>
               </div>
               <div>
                 <span className="text-xl font-bold font-mono text-[#A66E4E] flex justify-center items-center gap-1">
@@ -272,7 +272,7 @@ export default function Dashboard({ students, dipaCategories, transactions, onNa
           <div className="bg-[#EBE7DF]/50 p-4 rounded-xl border border-[#D9D3C7] mt-2 flex items-start gap-2.5">
             <Activity className="w-4.5 h-4.5 text-[#5A5A40] shrink-0 mt-0.5" />
             <div className="text-[11px] text-[#3D3D3D] leading-relaxed">
-              <strong>Info SPP Juni:</strong> Target penerimaan iuran dari <strong>764 santri</strong> adalah sebesar <strong>{formatRupiah(764 * 750000)}</strong>. Realisasi saat ini: <strong>{formatRupiah(stats.sppLunasCount * 750000)}</strong>.
+              <strong>Info SPP Juni:</strong> Target penerimaan iuran dari <strong>{students.length} santri</strong> adalah sebesar <strong>{formatRupiah(students.length * getPrice(currentMonth))}</strong>. Realisasi saat ini: <strong>{formatRupiah(stats.sppLunasCount * getPrice(currentMonth))}</strong>.
             </div>
           </div>
         </div>

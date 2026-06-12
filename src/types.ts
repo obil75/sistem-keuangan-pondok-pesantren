@@ -11,6 +11,13 @@ export interface Student {
   parentName: string;
   parentPhone: string;
   monthlyFeePaid: Record<string, boolean>; // key: "YYYY-MM", value: true (paid) or false (unpaid)
+  isActive?: boolean; // true = aktif, false = non-aktif/keluar
+}
+
+export interface SubCategoryDetail {
+  name: string;
+  volume?: string;
+  unitPrice?: number;
 }
 
 export interface DipaCategory {
@@ -19,6 +26,10 @@ export interface DipaCategory {
   name: string;
   allocatedAmount: number; // Anggaran yang direncanakan
   realizedAmount: number;  // Anggaran yang sudah terpakai
+  subCategories?: string[]; // Optional sub-categories
+  volume?: string;         // Volume e.g. "12 bln"
+  unitPrice?: number;      // Harga satuan
+  subCategoriesDetail?: SubCategoryDetail[];
 }
 
 export type TransactionType = 'masuk' | 'keluar';
@@ -27,6 +38,7 @@ export interface Transaction {
   id: string;
   type: TransactionType;
   category: string; // nama kategori DIPA atau "Iuran Santri"
+  subCategory?: string; // sub-kategori belanja jika ada
   amount: number;
   date: string; // YYYY-MM-DD
   description: string;
@@ -54,4 +66,6 @@ export interface FinancialStats {
   sppLunasCount: number;
   sppTunggakanCount: number;
   totalTunggakanAmount: number;
+  totalTunggakanSemuaBulan: number;
+  totalExpectedIuran: number;
 }
